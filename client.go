@@ -92,10 +92,10 @@ func (c *Client) Profile() *ProfileService {
 }
 
 // UserInfo hopefully is the endpoint that gets me the login info I want
-func (c *Client) UserInfo() (*Response, error) {
+func (c *Client) UserInfo() ([]byte, *Response, error) {
 	rel, err := url.Parse("oauth/userinfo")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	u := c.AuthURL.ResolveReference(rel)
@@ -104,7 +104,7 @@ func (c *Client) UserInfo() (*Response, error) {
 
 	req, err := http.NewRequest("GET", u.String(), buf)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	req.Header.Add("Accept", "application/json")
@@ -114,7 +114,7 @@ func (c *Client) UserInfo() (*Response, error) {
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	defer func() {
@@ -126,10 +126,16 @@ func (c *Client) UserInfo() (*Response, error) {
 	response := newResponse(resp)
 
 	if err := CheckError(resp); err != nil {
-		return response, err
+		return nil, response, err
 	}
 
-	return response, err
+	var b []byte
+	_, err = resp.Body.Read(b)
+	if err != nil {
+		return nil, response, err
+	}
+
+	return b, response, err
 }
 
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
