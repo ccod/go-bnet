@@ -129,13 +129,12 @@ func (c *Client) UserInfo() ([]byte, *Response, error) {
 		return nil, response, err
 	}
 
-	var b []byte
-	_, err = resp.Body.Read(b)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, response, err
 	}
 
-	return b, response, err
+	return body, response, err
 }
 
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
