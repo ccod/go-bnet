@@ -34,6 +34,12 @@ type Client struct {
 	UserAgent string
 }
 
+// User represents the user information for a Battle.net account
+type User struct {
+	ID        int    `json:"id"`
+	BattleTag string `json:"battletag"`
+}
+
 // NewClient creates a new Battle.net client.
 //
 // region must be a valid Battle.net region. This will not validate it
@@ -92,10 +98,11 @@ func (c *Client) Profile() *ProfileService {
 }
 
 // UserInfo hopefully is the endpoint that gets me the login info I want
-func (c *Client) UserInfo() ([]byte, *Response, error) {
+func (c *Client) UserInfo() (User, *Response, error) {
+	user := User{}
 	rel, err := url.Parse("oauth/userinfo")
 	if err != nil {
-		return nil, nil, err
+		return user, nil, err
 	}
 
 	u := c.AuthURL.ResolveReference(rel)
@@ -104,7 +111,7 @@ func (c *Client) UserInfo() ([]byte, *Response, error) {
 
 	req, err := http.NewRequest("GET", u.String(), buf)
 	if err != nil {
-		return nil, nil, err
+		return user, nil, err
 	}
 
 	req.Header.Add("Accept", "application/json")
@@ -114,7 +121,7 @@ func (c *Client) UserInfo() ([]byte, *Response, error) {
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return nil, nil, err
+		return user, nil, err
 	}
 
 	defer func() {
@@ -126,15 +133,12 @@ func (c *Client) UserInfo() ([]byte, *Response, error) {
 	response := newResponse(resp)
 
 	if err := CheckError(resp); err != nil {
-		return nil, response, err
+		return user, response, err
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, response, err
-	}
+	err = json.NewDecoder(resp.Body).Decode(&user)
 
-	return body, response, err
+	return user, response, err
 }
 
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
