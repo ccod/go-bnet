@@ -26,6 +26,10 @@ type Client struct {
 	// the region with the auth region used for Client.
 	BaseURL *url.URL
 
+	// AuthURL is the base url for oauth requests, singularly used for 'oauth/userinfo'
+	// similar to BaseURL, makes use of region in its construction
+	AuthURL *url.URL
+
 	// UserAgent is the user agent to set on API requests.
 	UserAgent string
 }
@@ -51,6 +55,11 @@ func NewClient(region string, c *http.Client) *Client {
 		baseURLStr = "https://api.battlenet.com.cn/"
 	}
 
+	authURLStr := fmt.Sprintf("https://%s.battle.net/", region)
+	if region == "cn" {
+		authURLStr = "https://www.battlenet.com.cn/"
+	}
+
 	baseURL, err := url.Parse(baseURLStr)
 	if err != nil {
 		// We panic because we manually construct it above so it should
@@ -58,19 +67,69 @@ func NewClient(region string, c *http.Client) *Client {
 		panic(err)
 	}
 
+	authURL, err := url.Parse(authURLStr)
+	if err != nil {
+		// should not fail unless you give a pretty horrible region
+		panic(err)
+	}
+
 	return &Client{
 		Client:    c,
 		BaseURL:   baseURL,
+		AuthURL:   authURL,
 		UserAgent: userAgent,
 	}
 }
 
+// Account currently kind of janky, as the api has up ended some design assumptions
 func (c *Client) Account() *AccountService {
 	return &AccountService{client: c}
 }
 
+// Profile is mostly a stub till I sort this out
 func (c *Client) Profile() *ProfileService {
 	return &ProfileService{client: c}
+}
+
+// UserInfo hopefully is the endpoint that gets me the login info I want
+func (c *Client) UserInfo() (*Response, error) {
+	rel, err := url.Parse("oauth/userinfo")
+	if err != nil {
+		return nil, err
+	}
+
+	u := c.AuthURL.ResolveReference(rel)
+
+	var buf io.ReadWriter
+
+	req, err := http.NewRequest("GET", u.String(), buf)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Accept", "application/json")
+	if c.UserAgent != "" {
+		req.Header.Add("User-Agent", c.UserAgent)
+	}
+
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		// Drain up to 512 bytes and close the body to let the Transport reuse the connection
+		io.CopyN(ioutil.Discard, resp.Body, 512)
+		resp.Body.Close()
+	}()
+
+	response := newResponse(resp)
+
+	if err := CheckError(resp); err != nil {
+		return response, err
+	}
+
+	return response, err
 }
 
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
